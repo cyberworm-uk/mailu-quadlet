@@ -24,6 +24,35 @@
               };
             };
           };
+          login = pkgs.writeShellScriptBin "login"
+          ''
+            ${pkgs.buildah}/bin/buildah login ghcr.io
+          '';
+          build = pkgs.writeShellScriptBin "build"
+          ''
+            TIMESTAMP=$(${pkgs.coreutils}/bin/date -I)
+            nix build .#packages.aarch64-linux.container --out-link "result-arm64-$TIMESTAMP"
+            nix build .#packages.x86_64-linux.container --out-link "result-amd64-$TIMESTAMP"
+          '';
+          publish = pkgs.writeShellScriptBin "publish"
+          ''
+            TIMESTAMP=$(${pkgs.coreutils}/bin/date -I)
+            ${pkgs.buildah}/bin/buildah manifest exists ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" && \
+              ${pkgs.buildah}/bin/buildah manifest rm ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP"
+              ${pkgs.podman}/bin/podman load -i "result-arm64-$TIMESTAMP" && \
+                ${pkgs.podman}/bin/podman load -i "result-amd64-$TIMESTAMP" && \
+              ${pkgs.buildah}/bin/buildah manifest create ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" && \
+                ${pkgs.buildah}/bin/buildah manifest add ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" localhost/mailu-quadlet:aarch64-linux && \
+                ${pkgs.buildah}/bin/buildah manifest add ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" localhost/mailu-quadlet:x86_64-linux && \
+              ${pkgs.buildah}/bin/buildah manifest push --all ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" docker://ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" && \
+                ${pkgs.buildah}/bin/buildah manifest push --all ghcr.io/cyberworm-uk/mailu-quadlet:"$TIMESTAMP" docker://ghcr.io/cyberworm-uk/mailu-quadlet:latest
+          '';
+        };
+        devShells.default = pkgs.mkShell {
+          packages = [
+            pkgs.go
+            pkgs.gopls
+          ];
         };
       }
     );
